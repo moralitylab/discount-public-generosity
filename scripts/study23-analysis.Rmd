@@ -11,11 +11,6 @@ if (!require(pacman)) install.packages("pacman")
 require(pacman)
 pacman::p_load(here, dplyr, tidyr, forcats, ggplot2, sysfonts)
 
-study1_df <- readr::read_csv(
-  here("study-13-14/data/clean/study1-clean.csv"),
-  show_col_types = F
-)
-
 study2_df <- readr::read_csv(
   here("study-13-14/data/clean/study2-clean.csv"),
   show_col_types = F
@@ -36,63 +31,6 @@ font_add(
   "/System/Library/Fonts/HelveticaNeue.ttc"
 )
 ```
-
-
-# Study 1
-
-```{r rename-study1-variables}
-study1_df <- study1_df %>%
-  dplyr::select(c(subj, Condition, MoralGood1:MoralGood17)) %>%
-  dplyr::mutate(
-    Condition = forcats::fct_relevel(
-      as.factor(
-        recode(Condition,
-          "SelfPrivate" = "Private-Self",
-          "OtherPrivate" = "Private-Other",
-          "SelfPublic" = "Public-Self",
-          "OtherPublic" = "Public-Other"
-        )
-      ),
-      "Private-Self", "Private-Other", "Public-Self", "Public-Other"
-    )
-  ) %>%
-  dplyr::rename(condition = Condition) %>%
-  tidyr::pivot_longer(!c(subj, condition),
-    names_to = "vignette", values_to = "moral_goodness"
-  ) %>%
-  dplyr::mutate(
-    vignette = recode(
-      forcats::fct_relevel(
-        as.factor(vignette),
-        "MoralGood1", "MoralGood2", "MoralGood3", "MoralGood4",
-        "MoralGood5", "MoralGood6", "MoralGood7", "MoralGood8",
-        "MoralGood9", "MoralGood10", "MoralGood11", "MoralGood12",
-        "MoralGood13", "MoralGood14", "MoralGood15", "MoralGood16",
-        "MoralGood17"
-      ),
-      "MoralGood1" = "Lend money\n to a friend",
-      "MoralGood2" = "Pay colleague\n a compliment",
-      "MoralGood3" = "Hold door\n for someone",
-      "MoralGood4" = "Fix someone's\n flat tire",
-      "MoralGood5" = "Walk elderly\n person across street",
-      "MoralGood6" = "Tip waiter\n generously",
-      "MoralGood7" = "Buy groceries for\n someone in need",
-      "MoralGood8" = "Buy food for\n homeless person",
-      "MoralGood9" = "Donate car\n to charity",
-      "MoralGood10" = "Mow friend's lawn",
-      "MoralGood11" = "Walk friend's dog",
-      "MoralGood12" = "Donate to an artist",
-      "MoralGood13" = "Pick up trash",
-      "MoralGood14" = "Donate to charity",
-      "MoralGood15" = "Buy friend an\n expensive gift",
-      "MoralGood16" = "Let someone in a\n rush skip the line",
-      "MoralGood17" = "Help coworker\n after hours"
-    ),
-    subj = as.factor(subj)
-  ) %>%
-  dplyr::rename(id = subj)
-```
-
 
 # Study 2
 
@@ -182,7 +120,21 @@ study2_df <- study2_df %>%
       "vignette_16" = "Let someone in a\n rush skip the line",
       "vignette_17" = "Help coworker\n after hours"
     )
-  )
+  ) %>% 
+  tidyr::pivot_longer(!c(id, condition, vignette), 
+                      names_to = "iv", values_to = "dv") %>% 
+  dplyr::mutate(iv = recode(forcats::fct_relevel(
+    as.factor(iv), 
+    "moral_goodness", 
+    "trust", 
+    "principled_motivation", 
+    "rep_signal", 
+    "norm_expect"), 
+    "moral_goodness" = "Moral Goodness", 
+    "norm_expect" = "Normative Expectation",
+    "principled_motivation" = "Principled Motivation",
+    "rep_signal" = "Reputation Signaling",
+    "trust" = "Trust"))
 ```
 
 
@@ -277,30 +229,41 @@ study3_df <- study3_df %>%
     )
   ) %>%
   dplyr::mutate(id = as.factor(rep((1361:2261), each = 5))) %>%
-  dplyr::select(-response_id)
+  dplyr::select(-response_id) %>% 
+  tidyr::pivot_longer(!c(id, condition, vignette), 
+                      names_to = "iv", values_to = "dv") %>% 
+  dplyr::mutate(iv = recode(forcats::fct_relevel(
+    as.factor(iv), 
+    "moral_goodness", 
+    "trust", 
+    "principled_motivation", 
+    "rep_signal", 
+    "norm_expect"), 
+    "moral_goodness" = "Moral Goodness", 
+    "norm_expect" = "Normative Expectation",
+    "principled_motivation" = "Principled Motivation",
+    "rep_signal" = "Reputation Signaling",
+    "trust" = "Trust"))
 ```
 
 
-# Merge Data Across Studies
+# Set Palette
 
-```{r merge-all-dataframes}
-study123_df <- dplyr::bind_rows(study1_df, study2_df, study3_df, .id = "study")
-
-# Set plotting palette
+```{r set-palette}
 vignette_palette <- c("#0d4785", "#637db2", "#b52b12", "#cc5c3d")
 ```
 
 
-### Moral Goodness (Virtue Discounting)
+### Study 2
 
-```{r plot-study123-moral-goodness-violin}
+```{r plot-study2-collapsed-violin}
 set.seed(7)
 ggplot(
-  study123_df, aes(x = vignette, y = moral_goodness, fill = condition)
+  study2_df, aes(x = iv, y = dv, fill = condition)
 ) +
   geom_point(aes(fill = condition, color = condition),
-    alpha = 0.5, stroke = 0, size = 1,
-    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+             alpha = 0.1, stroke = 0, size = 1,
+             position = position_jitterdodge(jitter.height = 0.25, 0.25)
   ) +
   geom_boxplot(
     aes(fill = condition, color = condition),
@@ -314,25 +277,25 @@ ggplot(
   ) +
   stat_summary(
     aes(
-      y = moral_goodness,
+      y = dv,
       group = condition
     ),
     fun.data = "mean_cl_normal", geom = "errorbar",
     width = 0.25,
     position = position_dodge(0.75)
   ) +
-  scale_y_continuous(breaks = seq(1, 7, by = 1), oob = scales::squish) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
   scale_fill_manual(values = vignette_palette) +
   scale_color_manual(values = vignette_palette) +
   labs(
-    x = "**Vignette**", y = "**Moral Goodness**",
+    x = "**Rating**", y = "**Score**",
     fill = "Condition  |", color = "Condition  |", linetype = "Condition"
   ) +
   theme(
     text = element_text(family = "Helvetica Neue"),
-    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = 5)),
     axis.text.x = element_text(
-      size = 10, angle = 45, margin = margin(t = 30)
+      size = 10
     ),
     axis.title.y = element_markdown(size = 16),
     legend.title = element_text(face = "bold"),
@@ -340,22 +303,21 @@ ggplot(
     legend.position = "bottom"
   )
 
-ggsave(here("study-13-14/figures/study123-moral-goodness-violin.png"),
-  width = 20, height = 5
+ggsave(here("study-13-14/figures/study2-collapsed.png"),
+       width = 10, height = 5
 )
 ```
 
+### Study 3
 
-### Trust
-
-```{r plot-study123-trust-violin}
+```{r plot-study3-collapsed-violin}
 set.seed(7)
 ggplot(
-  study123_df, aes(x = vignette, y = trust, fill = condition)
+  study3_df, aes(x = iv, y = dv, fill = condition)
 ) +
   geom_point(aes(fill = condition, color = condition),
-    alpha = 0.5, stroke = 0, size = 1,
-    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+             alpha = 0.3, stroke = 0, size = 1,
+             position = position_jitterdodge(jitter.height = 0.25, 0.25)
   ) +
   geom_boxplot(
     aes(fill = condition, color = condition),
@@ -369,25 +331,25 @@ ggplot(
   ) +
   stat_summary(
     aes(
-      y = trust,
+      y = dv,
       group = condition
     ),
     fun.data = "mean_cl_normal", geom = "errorbar",
     width = 0.25,
     position = position_dodge(0.75)
   ) +
-  scale_y_continuous(breaks = seq(1, 7, by = 1), oob = scales::squish) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
   scale_fill_manual(values = vignette_palette) +
   scale_color_manual(values = vignette_palette) +
   labs(
-    x = "**Vignette**", y = "**Trust**",
+    x = "**Rating**", y = "**Score**",
     fill = "Condition  |", color = "Condition  |", linetype = "Condition"
   ) +
   theme(
     text = element_text(family = "Helvetica Neue"),
-    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = 5)),
     axis.text.x = element_text(
-      size = 10, angle = 45, margin = margin(t = 30)
+      size = 10
     ),
     axis.title.y = element_markdown(size = 16),
     legend.title = element_text(face = "bold"),
@@ -395,179 +357,10 @@ ggplot(
     legend.position = "bottom"
   )
 
-ggsave(here("study-13-14/figures/study123-trust-violin.png"),
-  width = 20, height = 5
+ggsave(here("study-13-14/figures/study3-collapsed.png"),
+       width = 10, height = 5
 )
 ```
-
-
-### Principled Motivation
-
-```{r plot-study123-principled-motivation-violin}
-set.seed(7)
-ggplot(
-  study123_df, aes(x = vignette, y = principled_motivation, fill = condition)
-) +
-  geom_point(aes(fill = condition, color = condition),
-    alpha = 0.5, stroke = 0, size = 1,
-    position = position_jitterdodge(jitter.height = 0.25, 0.75)
-  ) +
-  geom_boxplot(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5, outlier.size = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  geom_violin(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  stat_summary(
-    aes(
-      y = principled_motivation,
-      group = condition
-    ),
-    fun.data = "mean_cl_normal", geom = "errorbar",
-    width = 0.25,
-    position = position_dodge(0.75)
-  ) +
-  scale_y_continuous(breaks = seq(1, 7, by = 1), oob = scales::squish) +
-  scale_fill_manual(values = vignette_palette) +
-  scale_color_manual(values = vignette_palette) +
-  labs(
-    x = "**Vignette**", y = "**Principled Motivation**",
-    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
-  ) +
-  theme(
-    text = element_text(family = "Helvetica Neue"),
-    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
-    axis.text.x = element_text(
-      size = 10, angle = 45, margin = margin(t = 30)
-    ),
-    axis.title.y = element_markdown(size = 16),
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(size = 10),
-    legend.position = "bottom"
-  )
-
-ggsave(here("study-13-14/figures/study123-principled-motivation-violin.png"),
-  width = 20, height = 5
-)
-```
-
-
-### Reputation Signaling
-
-```{r plot-study123-reputation-signaling-violin}
-set.seed(7)
-ggplot(
-  study123_df, aes(x = vignette, y = rep_signal, fill = condition)
-) +
-  geom_point(aes(fill = condition, color = condition),
-    alpha = 0.5, stroke = 0, size = 1,
-    position = position_jitterdodge(jitter.height = 0.25, 0.75)
-  ) +
-  geom_boxplot(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5, outlier.size = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  geom_violin(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  stat_summary(
-    aes(
-      y = rep_signal,
-      group = condition
-    ),
-    fun.data = "mean_cl_normal", geom = "errorbar",
-    width = 0.25,
-    position = position_dodge(0.75)
-  ) +
-  scale_y_continuous(breaks = seq(1, 7, by = 1), oob = scales::squish) +
-  scale_fill_manual(values = vignette_palette) +
-  scale_color_manual(values = vignette_palette) +
-  labs(
-    x = "**Vignette**", y = "**Reputation Signaling**",
-    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
-  ) +
-  theme(
-    text = element_text(family = "Helvetica Neue"),
-    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
-    axis.text.x = element_text(
-      size = 10, angle = 45, margin = margin(t = 30)
-    ),
-    axis.title.y = element_markdown(size = 16),
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(size = 10),
-    legend.position = "bottom"
-  )
-
-ggsave(here("study-13-14/figures/study123-reputation-signaling-violin.png"),
-  width = 20, height = 5
-)
-```
-
-
-### Normative Expectation
-
-```{r plot-study123-normative-expectation-violin}
-set.seed(7)
-ggplot(
-  study123_df, aes(x = vignette, y = norm_expect, fill = condition)
-) +
-  geom_point(aes(fill = condition, color = condition),
-    alpha = 0.5, stroke = 0, size = 1,
-    position = position_jitterdodge(jitter.height = 0.25, 0.75)
-  ) +
-  geom_boxplot(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5, outlier.size = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  geom_violin(
-    aes(fill = condition, color = condition),
-    width = 0.5, alpha = 0.5,
-    position = position_dodge(0.75)
-  ) +
-  stat_summary(
-    aes(
-      y = norm_expect,
-      group = condition
-    ),
-    fun.data = "mean_cl_normal", geom = "errorbar",
-    width = 0.25,
-    position = position_dodge(0.75)
-  ) +
-  scale_y_continuous(breaks = seq(1, 7, by = 1), oob = scales::squish) +
-  scale_fill_manual(values = vignette_palette) +
-  scale_color_manual(values = vignette_palette) +
-  labs(
-    x = "**Vignette**", y = "**Normative Expectation**",
-    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
-  ) +
-  theme(
-    text = element_text(family = "Helvetica Neue"),
-    axis.title.x = element_markdown(
-      size = 16,
-      margin = margin(t = -30, b = 5)
-    ),
-    axis.text.x = element_text(
-      size = 10, angle = 45, margin = margin(t = 30)
-    ),
-    axis.title.y = element_markdown(size = 16),
-    legend.title = element_text(face = "bold"),
-    legend.text = element_text(size = 10),
-    legend.position = "bottom"
-  )
-
-ggsave(here("study-13-14/figures/study123-normative-expectation-violin.png"),
-  width = 20, height = 5
-)
-```
-
 
 # Clean Workspace
 

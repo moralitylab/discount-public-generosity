@@ -622,7 +622,7 @@ study3_df %>%
     `norm_expect_mean_Public-Other`, `norm_expect_sd_Public-Other`
   )) %>%
   readr::write_csv(here(
-    "study-13-14/data/study3-descriptive-statistics-table.csv"
+    "study-13-14/data/tables/study3-descriptive-statistics-table.csv"
   ))
 ```
 
