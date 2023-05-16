@@ -1,0 +1,255 @@
+---
+title: "JTF 13 + 14: Study 2 Data Cleaning + Wrangling"
+author: "Nathan Liang"
+date: "February 5, 2023"
+---
+
+# Import Packages and Datasets
+
+```{r load-packages-data}
+if (!require(pacman)) install.packages("pacman")
+require(pacman)
+pacman::p_load(here, dplyr, tidyr, stringr, ggplot2)
+
+study2_df <- read.csv(here(
+  "study-13-14/data/raw/study2-raw.csv"
+)) %>%
+  mutate_if(is.character, list(~ na_if(., ""))) # convert any empty space to NA
+```
+
+
+# Unneeded Columns
+
+```{r drop-unused-columns}
+# <!-- Drop Qualtrics columns that clog up dataframe --> #
+study2_df <- study2_df %>%
+  dplyr::select(-c(
+    grep(".Click|.Submit|.Count", names(study2_df)),
+    StartDate:RecordedDate,
+    RecipientLastName:consent,
+    DescNom_1:Responsibility_2
+  ))
+```
+
+
+# Attention Checks
+
+```{r filter-attention-check}
+study2_df <- study2_df %>%
+  # <!-- Drop duplicates --> #
+  dplyr::distinct(id, .keep_all = T) %>%
+  # <!-- Verify attention check --> #
+  dplyr::mutate(AttCheck = stringr::str_remove_all(tolower(AttCheck), " ")) %>%
+  dplyr::filter(AttCheck == "orange") %>%
+  dplyr::select(-AttCheck) %>%
+  dplyr::mutate_all(~ if_else(is.nan(.), NA, .))
+```
+
+
+# Reorder Correct DV Columns
+
+```{r reorder-correct-dv-columns}
+# <!-- Original column order (incorrect) --> #
+# Public Other: X<1-17>_MG/Rating_<1-10>
+# Private Other: X<1-17>_MG/Rating_<1-10>.1
+# Public Self: X17_MG/Rating_<1-10>.2 + X<18-33>_MG/Rating_<1-10>
+# Private Self: X<1-16>_MG/Rating_<1-10>.2 + X17_MG/Rating_<1-10>.3
+
+NewNames1314 <- function(Condition) {
+  new_names <- c()
+  if (Condition == "public_self") {
+    for (suffix in c(
+      "MG_1.2", "MG_2.2",
+      paste0("Rating_", as.character(1:10), ".2")
+    )) {
+      for (prefix in as.character(1:17)) {
+        new_names <- c(new_names, (paste0("X", prefix, "_", suffix)))
+      }
+    }
+  }
+  if (Condition == "private_self") {
+    for (suffix in c(
+      "MG_1.3", "MG_2.3",
+      paste0("Rating_", as.character(1:10), ".3")
+    )) {
+      for (prefix in as.character(1:17)) {
+        new_names <- c(new_names, (paste0("X", prefix, "_", suffix)))
+      }
+    }
+  }
+  new_names <- sort(new_names)
+  return(new_names)
+}
+
+# X<1-17>_MG/Rating_<1-10>.2
+renamed_columns_public_self <- c(
+  NewNames1314("public_self")[1:12],
+  NewNames1314("public_self")[109:204],
+  NewNames1314("public_self")[13:108]
+)
+
+# X<1-17>_MG/Rating_<1-10>.3
+renamed_columns_private_self <- c(
+  NewNames1314("private_self")[1:12],
+  NewNames1314("private_self")[109:204],
+  NewNames1314("private_self")[13:108]
+)
+
+# <!-- Before bulk rename, ensure all columns are sorted identically --> #
+misnomer_columns_public_self <- sort(colnames(
+  study2_df %>%
+    dplyr::select(c("X17_MG_1.2":"X33_Rating_10"))
+))
+
+misnomer_columns_private_self <- sort(colnames(
+  study2_df %>%
+    dplyr::select(c("X1_MG_1.2":"X17_Rating_10.3"))
+))
+
+misnomer_columns_private_self <- c(
+  misnomer_columns_private_self[1:12],
+  misnomer_columns_private_self[109:204],
+  misnomer_columns_private_self[13:108]
+)
+
+study2_df <- study2_df %>%
+  dplyr::rename_with(
+    ~renamed_columns_private_self,
+    all_of(misnomer_columns_private_self)
+  ) %>%
+  dplyr::rename_with(
+    ~renamed_columns_public_self,
+    all_of(misnomer_columns_public_self)
+  )
+```
+
+
+# Reformat Data with Pivot
+
+```{r reformat-data}
+study2_df <- study2_df %>%
+  pivot_longer(
+    cols = starts_with("X"),
+    names_to = c("vignette", "task", "rating_number", "loop_count"),
+    names_pattern = "X?(.*)_(.*)_(.*)(\\..)?",
+    values_to = "rating"
+  ) %>%
+  tidyr::separate(rating_number, c("rating_number", "loop_count")) %>%
+  tidyr::unite("task", task:rating_number, remove = F) %>%
+  dplyr::select(-rating_number) %>%
+  # <!-- Rename and recode self/other column --> #
+  # Strip using regex "or" | operator the words "public" or "private"
+  dplyr::mutate(
+    self1_other0 = str_replace_all(tolower(
+      Condition
+    ), "public|private", ""),
+
+    # <!-- Rename and recode public/private column --> #
+    # Strip using regex "or" | operator the words "other" or "self"
+    private1_public0 = str_replace_all(tolower(Condition), "other|self", ""),
+
+    # <!-- Recode "self" = 1, "other" = 0 --> #
+    self1_other0 = if_else(self1_other0 == "self", 1, 0),
+
+    # <!-- Recode "private" = 1, "public" = 0 --> #
+    private1_public0 = if_else(private1_public0 == "private", 1, 0),
+
+    # <!-- Create column dummy coding appearance of vignette --> #
+    has_vignette = as.integer(complete.cases(rating))
+  ) %>%
+  # <!-- Swing MG<1-2> and Rating<1-10> from long to wide format --> #
+  tidyr::pivot_wider(names_from = task, values_from = rating) %>%
+  # <!-- Name vignette columns "vignette_#" --> #
+  dplyr::mutate(vignette = paste0("vignette_", vignette)) %>%
+  # <!-- Only keep the rows where participants actually saw vignettes --> #
+  dplyr::filter(has_vignette == 1) %>%
+  # <!-- Swing dummy-coded vignette long rows to wide columns --> #
+  dplyr::mutate(
+    vignette_1 = if_else(vignette == "vignette_1", 1, 0),
+    vignette_2 = if_else(vignette == "vignette_2", 1, 0),
+    vignette_3 = if_else(vignette == "vignette_3", 1, 0),
+    vignette_4 = if_else(vignette == "vignette_4", 1, 0),
+    vignette_5 = if_else(vignette == "vignette_5", 1, 0),
+    vignette_6 = if_else(vignette == "vignette_6", 1, 0),
+    vignette_7 = if_else(vignette == "vignette_7", 1, 0),
+    vignette_8 = if_else(vignette == "vignette_8", 1, 0),
+    vignette_9 = if_else(vignette == "vignette_9", 1, 0),
+    vignette_10 = if_else(vignette == "vignette_10", 1, 0),
+    vignette_11 = if_else(vignette == "vignette_11", 1, 0),
+    vignette_12 = if_else(vignette == "vignette_12", 1, 0),
+    vignette_13 = if_else(vignette == "vignette_13", 1, 0),
+    vignette_14 = if_else(vignette == "vignette_14", 1, 0),
+    vignette_15 = if_else(vignette == "vignette_15", 1, 0),
+    vignette_16 = if_else(vignette == "vignette_16", 1, 0),
+    vignette_17 = if_else(vignette == "vignette_17", 1, 0),
+
+    # <!-- Add unique numerical ID --> #
+    id = rep(1:903, each = 5)
+  ) %>%
+  # <!-- Reorder vignette columns in ascending order --> #
+  dplyr::select(c("ResponseId":"Rating_10"), sort(colnames(.))) %>%
+  # <!-- Rearrange vignette order --> #
+  dplyr::relocate(c("vignette_10":"vignette_17"), .after = "vignette_9") %>%
+  # <!-- Recode likert response text to ordinal 1-7 scale --> #
+  dplyr::mutate_at(
+    c(23:34),
+    ~ as.numeric(recode(.,
+      "Strongly agree" = 7,
+      "Agree" = 6,
+      "Somewhat agree" = 5,
+      "Neither agree nor disagree" = 4,
+      "Somewhat disagree" = 3,
+      "Disagree" = 2,
+      "Strongly disagree" = 1
+    ))
+  ) %>%
+  # <!-- Replace NA values in dummy-coded vignette columns with 0s --> #
+  # mutate_at(c(35:51), ~replace_na(as.double(.), 0)) %>%
+
+  # <!-- Rename religiosity and political belief columns --> #
+  dplyr::rename(
+    secular1_4religious = Rel,
+    polSocConservative1_7liberal = pol_soc,
+    polEconConservative1_7liberal = pol_econ
+  ) %>%
+  # <!-- Recode continuous demographics questions --> #
+  # Religiosity
+  dplyr::mutate(
+    secular1_4religious =
+      recode(secular1_4religious,
+        "Very religious" = 4,
+        "Moderately religious" = 3,
+        "Slightly religious" = 2,
+        "Not at all religious" = 1,
+        "Don't know" = 0
+      )
+  ) %>%
+  # ...and both political belief questions
+  dplyr::mutate_at(
+    c(14:15),
+    ~ as.numeric(recode(.,
+      "Very liberal" = 7,
+      "Liberal" = 6,
+      "Somewhat liberal" = 5,
+      "Moderate" = 4,
+      "Somewhat conservative" = 3,
+      "Conservative" = 2,
+      "Very conservative" = 1
+    ))
+  ) %>%
+  # <!-- Drop incorrect/unnecessary columns --> #
+  dplyr::select(-c(Condition, has_vignette, vignette, loop_count, Random.ID))
+```
+
+
+# Write output file(s)
+
+```{r write-output-clean-workspace}
+# Export dataset to analyze with separate script
+readr::write_csv(study2_df, here("study-13-14/data/clean/study2-clean.csv"))
+
+rm(list = ls()) # clear environment
+gc() # garbage collection
+cat("\014") # clear console
+.rs.restartR() # restart R
+```

@@ -1,0 +1,856 @@
+---
+title: "JTF 13 + 14: Study 2 Analysis"
+author: "Nathan Liang"
+date: "February 5, 2023"
+---
+
+# Import Packages and datasets
+
+```{r load-package-data}
+if (!require(pacman)) install.packages("pacman")
+require(pacman)
+pacman::p_load(here, dplyr, tidyr, stringr, forcats, ggplot2, ggtext, sysfonts)
+
+study1_df <- readr::read_csv(here("study-13-14/data/clean/study1-clean.csv"),
+  show_col_types = F
+)
+study2_df <- readr::read_csv(here("study-13-14/data/clean/study2-clean.csv"),
+  show_col_types = F
+)
+```
+
+
+# Initialize Font for Plotting
+
+```{r load-fonts}
+font_add(
+  "Helvetica Neue",
+  "/System/Library/Fonts/HelveticaNeue.ttc"
+)
+```
+
+
+# Study 1
+
+## Prep for Plotting
+
+```{r rename-study1-variables}
+study1_plot_df <- study1_df %>%
+  dplyr::select(c(subj, Condition, MoralGood1:MoralGood17)) %>%
+  dplyr::mutate(
+    Condition = forcats::fct_relevel(
+      as.factor(
+        recode(Condition,
+          "SelfPrivate" = "Private-Self",
+          "OtherPrivate" = "Private-Other",
+          "SelfPublic" = "Public-Self",
+          "OtherPublic" = "Public-Other"
+        )
+      ),
+      "Private-Self", "Private-Other", "Public-Self", "Public-Other"
+    )
+  ) %>%
+  dplyr::rename(condition = Condition) %>%
+  tidyr::pivot_longer(!c(subj, condition),
+    names_to = "vignette", values_to = "moral_goodness"
+  ) %>%
+  dplyr::mutate(
+    vignette = recode(
+      forcats::fct_relevel(
+        as.factor(vignette),
+        "MoralGood1", "MoralGood2", "MoralGood3", "MoralGood4",
+        "MoralGood5", "MoralGood6", "MoralGood7", "MoralGood8",
+        "MoralGood9", "MoralGood10", "MoralGood11", "MoralGood12",
+        "MoralGood13", "MoralGood14", "MoralGood15", "MoralGood16",
+        "MoralGood17"
+      ),
+      "MoralGood1" = "Lend money\n to a friend",
+      "MoralGood2" = "Pay colleague\n a compliment",
+      "MoralGood3" = "Hold door\n for someone",
+      "MoralGood4" = "Fix someone's\n flat tire",
+      "MoralGood5" = "Walk elderly\n person across street",
+      "MoralGood6" = "Tip waiter\n generously",
+      "MoralGood7" = "Buy groceries for\n someone in need",
+      "MoralGood8" = "Buy food for\n homeless person",
+      "MoralGood9" = "Donate car\n to charity",
+      "MoralGood10" = "Mow friend's lawn",
+      "MoralGood11" = "Walk friend's dog",
+      "MoralGood12" = "Donate to an artist",
+      "MoralGood13" = "Pick up trash",
+      "MoralGood14" = "Donate to charity",
+      "MoralGood15" = "Buy friend an\n expensive gift",
+      "MoralGood16" = "Let someone in a\n rush skip the line",
+      "MoralGood17" = "Help coworker\n after hours"
+    )
+  )
+
+# Set palette
+vignette_palette <- c("#0d4785", "#637db2", "#b52b12", "#cc5c3d")
+```
+
+
+### Moral Goodness (Virtue Discounting)
+
+```{r plot-study1-moral-goodness-violin}
+set.seed(7)
+ggplot(
+  study1_plot_df, aes(x = vignette, y = moral_goodness, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = moral_goodness,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Moral Goodness**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study1-moral-goodness-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+## Study 1 Table
+
+```{r study1-table}
+study1_table_df <- study1_df %>%
+  dplyr::select(c("subj", "Condition", "MoralGood1":"MoralGood17")) %>%
+  dplyr::mutate(
+    Condition = forcats::fct_relevel(
+      as.factor(
+        recode(Condition,
+          "SelfPrivate" = "Private-Self",
+          "OtherPrivate" = "Private-Other",
+          "SelfPublic" = "Public-Self",
+          "OtherPublic" = "Public-Other"
+        )
+      ),
+      "Private-Self", "Private-Other", "Public-Self", "Public-Other"
+    )
+  ) %>%
+  dplyr::rename(condition = Condition) %>%
+  tidyr::pivot_longer(!c(subj, condition),
+    names_to = "vignette", values_to = "moral_goodness"
+  ) %>%
+  dplyr::mutate(
+    vignette = recode(
+      forcats::fct_relevel(
+        as.factor(vignette),
+        "MoralGood1", "MoralGood2", "MoralGood3", "MoralGood4",
+        "MoralGood5", "MoralGood6", "MoralGood7", "MoralGood8",
+        "MoralGood9", "MoralGood10", "MoralGood11", "MoralGood12",
+        "MoralGood13", "MoralGood14", "MoralGood15", "MoralGood16",
+        "MoralGood17"
+      ),
+      "MoralGood1" = "Lend money to a friend",
+      "MoralGood2" = "Pay colleague a compliment",
+      "MoralGood3" = "Hold door for someone",
+      "MoralGood4" = "Fix someone's flat tire",
+      "MoralGood5" = "Walk elderly person across street",
+      "MoralGood6" = "Tip waiter generously",
+      "MoralGood7" = "Buy groceries for someone in need",
+      "MoralGood8" = "Buy food for homeless person",
+      "MoralGood9" = "Donate car to charity",
+      "MoralGood10" = "Mow friend's lawn",
+      "MoralGood11" = "Walk friend's dog",
+      "MoralGood12" = "Donate to an artist",
+      "MoralGood13" = "Pick up trash",
+      "MoralGood14" = "Donate to charity",
+      "MoralGood15" = "Buy friend an expensive gift",
+      "MoralGood16" = "Let someone in a rush skip the line",
+      "MoralGood17" = "Help coworker after hours"
+    )
+  )
+
+study1_table_df %>%
+  dplyr::group_by(vignette, condition) %>%
+  dplyr::summarize(
+    # Moral Goodness (Virtue Discounting)
+    moral_goodness_mean = format(
+      round(mean(moral_goodness, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    moral_goodness_sd = format(
+      round(sd(moral_goodness, na.rm = TRUE), 2),
+      nsmall = 2
+    )
+  ) %>%
+  dplyr::ungroup() %>%
+  tidyr::pivot_wider(
+    names_from = condition,
+    values_from = c(
+      moral_goodness_mean,
+      moral_goodness_sd
+    )
+  ) %>%
+  dplyr::mutate(
+    moral_goodness_mean_sd_Private_Self = stringr::str_c(
+      `moral_goodness_mean_Private-Self`, " (",
+      `moral_goodness_sd_Private-Self`, ")"
+    ),
+    moral_goodness_mean_sd_Private_Other = stringr::str_c(
+      `moral_goodness_mean_Private-Other`, " (",
+      `moral_goodness_sd_Private-Other`, ")"
+    ),
+    moral_goodness_mean_sd_Public_Self = stringr::str_c(
+      `moral_goodness_mean_Public-Self`, " (",
+      `moral_goodness_sd_Public-Self`, ")"
+    ),
+    moral_goodness_mean_sd_Public_Other = stringr::str_c(
+      `moral_goodness_mean_Public-Other`, " (",
+      `moral_goodness_sd_Public-Other`, ")"
+    )
+  ) %>%
+  dplyr::select(-c(
+    `moral_goodness_mean_Private-Self`, `moral_goodness_sd_Private-Self`,
+    `moral_goodness_mean_Private-Other`, `moral_goodness_sd_Private-Other`,
+    `moral_goodness_mean_Public-Self`, `moral_goodness_sd_Public-Self`,
+    `moral_goodness_mean_Public-Other`, `moral_goodness_sd_Public-Other`
+  )) %>%
+  readr::write_csv(here(
+    "study-13-14/data/study1-descriptive-statistics-table.csv"
+  ))
+```
+
+
+# Study 2
+
+## Create DV columns
+
+```{r mutate-new-dv-columns}
+# MG_1 = Moral goodness (virtue discounting)
+# MG_2 = Trust
+# Rating<1-3> = Principled motivation (norm signaling)
+# Rating<4-8> = Reputation signaling
+# Rating<9-10> = Normative expectation
+
+study2_df <- study2_df %>%
+  # <!-- Move DVs to end of the data frame --> #
+  relocate(c(MG_1, MG_2), .after = vignette_17) %>%
+  # <!-- Rename DVs --> #
+  rename(
+    moral_goodness = MG_1, trust = MG_2
+  ) %>%
+  mutate(
+    principled_motivation = rowMeans(
+      dplyr::select(., c(Rating_1:Rating_3)),
+      na.rm = T
+    ),
+    rep_signal = rowMeans(
+      dplyr::select(., c(Rating_4:Rating_8)),
+      na.rm = T
+    ),
+    norm_expect = rowMeans(
+      dplyr::select(., c(Rating_9:Rating_10)),
+      na.rm = T
+    )
+  ) %>%
+  mutate(
+    condition = case_when(
+      self1_other0 == 1 & private1_public0 == 1 ~ "Private-Self",
+      self1_other0 == 0 & private1_public0 == 1 ~ "Private-Other",
+      self1_other0 == 1 & private1_public0 == 0 ~ "Public-Self",
+      self1_other0 == 0 & private1_public0 == 0 ~ "Public-Other"
+    ),
+    .before = Rating_1
+  )
+```
+
+
+## Prep for Plotting
+
+```{r rename-study2-variables}
+study2_plot_df <- study2_df %>%
+  dplyr::select(id, condition, vignette_1:norm_expect) %>%
+  dplyr::relocate(moral_goodness:norm_expect, .before = vignette_1) %>%
+  tidyr::pivot_longer(
+    !c(id:norm_expect),
+    names_to = "vignette", values_to = "shown"
+  ) %>%
+  dplyr::filter(shown == 1) %>%
+  dplyr::select(-shown) %>%
+  dplyr::mutate_all(~ ifelse(is.nan(.), NA, .)) %>%
+  dplyr::mutate(
+    id = as.factor(id),
+    condition = forcats::fct_relevel(
+      as.factor(condition),
+      "Private-Self", "Private-Other", "Public-Self", "Public-Other"
+    ),
+    vignette = recode(
+      forcats::fct_relevel(
+        as.factor(vignette),
+        "vignette_1", "vignette_2", "vignette_3", "vignette_4",
+        "vignette_5", "vignette_6", "vignette_7", "vignette_8",
+        "vignette_9", "vignette_10", "vignette_11", "vignette_12",
+        "vignette_13", "vignette_14", "vignette_15", "vignette_16",
+        "vignette_17"
+      ),
+      "vignette_1" = "Lend money\n to a friend",
+      "vignette_2" = "Pay colleague\n a compliment",
+      "vignette_3" = "Hold door\n for someone",
+      "vignette_4" = "Fix someone's\n flat tire",
+      "vignette_5" = "Walk elderly\n person across street",
+      "vignette_6" = "Tip waiter\n generously",
+      "vignette_7" = "Buy groceries for\n someone in need",
+      "vignette_8" = "Buy food for\n homeless person",
+      "vignette_9" = "Donate car\n to charity",
+      "vignette_10" = "Mow friend's lawn",
+      "vignette_11" = "Walk friend's dog",
+      "vignette_12" = "Donate to an artist",
+      "vignette_13" = "Pick up trash",
+      "vignette_14" = "Donate to charity",
+      "vignette_15" = "Buy friend an\n expensive gift",
+      "vignette_16" = "Let someone in a\n rush skip the line",
+      "vignette_17" = "Help coworker\n after hours"
+    )
+  )
+```
+
+
+### Moral Goodness (Virtue Discounting)
+
+```{r plot-study2-moral-goodness-violin}
+set.seed(7)
+ggplot(
+  study2_plot_df, aes(x = vignette, y = moral_goodness, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = moral_goodness,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Moral Goodness**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study2-moral-goodness-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+### Trust
+
+```{r plot-study2-trust-violin}
+set.seed(7)
+ggplot(
+  study2_plot_df, aes(x = vignette, y = trust, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = trust,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Trust**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study2-trust-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+### Principled Motivation
+
+```{r plot-study2-principled-motivation-violin}
+set.seed(7)
+ggplot(
+  study2_plot_df,
+  aes(x = vignette, y = principled_motivation, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = principled_motivation,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Principled Motivation**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study2-principled-motivation-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+### Reputation Signaling
+
+```{r plot-study2-reputation-signaling-violin}
+set.seed(7)
+ggplot(
+  study2_plot_df, aes(x = vignette, y = rep_signal, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = rep_signal,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Reputation Signaling**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(size = 16, margin = margin(t = -30, b = 5)),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study2-reputation-signaling-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+### Normative Expectation
+
+```{r plot-study2-normative-expectation-violin}
+set.seed(7)
+ggplot(
+  study2_plot_df, aes(x = vignette, y = norm_expect, fill = condition)
+) +
+  geom_point(aes(fill = condition, color = condition),
+    alpha = 0.5, stroke = 0, size = 1,
+    position = position_jitterdodge(jitter.height = 0.25, 0.75)
+  ) +
+  geom_boxplot(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5, outlier.size = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  geom_violin(
+    aes(fill = condition, color = condition),
+    width = 0.5, alpha = 0.5,
+    position = position_dodge(0.75)
+  ) +
+  stat_summary(
+    aes(
+      y = norm_expect,
+      group = condition
+    ),
+    fun.data = "mean_cl_normal", geom = "errorbar",
+    width = 0.25,
+    position = position_dodge(0.75)
+  ) +
+  scale_y_continuous(breaks = seq(1, 7, 1), oob = scales::squish) +
+  scale_fill_manual(values = vignette_palette) +
+  scale_color_manual(values = vignette_palette) +
+  labs(
+    x = "**Vignette**", y = "**Normative Expectation**",
+    fill = "Condition  |", color = "Condition  |", linetype = "Condition"
+  ) +
+  theme(
+    text = element_text(family = "Helvetica Neue"),
+    axis.title.x = element_markdown(
+      size = 16,
+      margin = margin(t = -30, b = 5)
+    ),
+    axis.text.x = element_text(
+      size = 10, angle = 45, margin = margin(t = 30)
+    ),
+    axis.title.y = element_markdown(size = 16),
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom"
+  )
+
+ggsave(here("study-13-14/figures/study2-normative-expectation-violin.png"),
+  width = 20, height = 5
+)
+```
+
+
+## Study 2 Tables
+
+```{r study2-tables}
+study2_df %>%
+  dplyr::select(
+    id, condition,
+    moral_goodness:norm_expect, vignette_1:vignette_17
+  ) %>%
+  tidyr::pivot_longer(
+    !c(id:norm_expect),
+    names_to = "vignette", values_to = "shown"
+  ) %>%
+  dplyr::filter(shown == 1) %>%
+  dplyr::select(-shown) %>%
+  dplyr::mutate(
+    id = as.factor(id),
+    condition = forcats::fct_relevel(
+      as.factor(condition),
+      "Private-Self", "Private-Other", "Public-Self", "Public-Other"
+    ),
+    vignette = recode(
+      forcats::fct_relevel(
+        as.factor(vignette),
+        "vignette_1", "vignette_2", "vignette_3", "vignette_4",
+        "vignette_5", "vignette_6", "vignette_7", "vignette_8",
+        "vignette_9", "vignette_10", "vignette_11", "vignette_12",
+        "vignette_13", "vignette_14", "vignette_15", "vignette_16",
+        "vignette_17"
+      ),
+      "vignette_1" = '(1) "Lend money to a friend"',
+      "vignette_2" = '(2) "Pay colleague a compliment"',
+      "vignette_3" = '(3) "Hold door for someone"',
+      "vignette_4" = '(4) "Fix someone\'s flat tire"',
+      "vignette_5" = '(5) "Walk elderly person across street"',
+      "vignette_6" = '(6) "Tip waiter generously"',
+      "vignette_7" = '(7) "Buy groceries for someone in need"',
+      "vignette_8" = '(8) "Buy food for homeless person"',
+      "vignette_9" = '(9) "Donate car to charity"',
+      "vignette_10" = '(10) "Mow friend\'s lawn"',
+      "vignette_11" = '(11) "Walk friend\'s dog"',
+      "vignette_12" = '(12) "Donate to an artist"',
+      "vignette_13" = '(13) "Pick up trash"',
+      "vignette_14" = '(14) "Donate to charity"',
+      "vignette_15" = '(15) "Buy friend an expensive gift"',
+      "vignette_16" = '(16) "Let someone in a rush skip the line"',
+      "vignette_17" = '(17) "Help coworker after hours"'
+    )
+  ) %>%
+  dplyr::rename(Vignette = vignette) %>%
+  dplyr::group_by(Vignette, condition) %>%
+  dplyr::summarize(
+    # Moral Goodness (Virtue Discounting)
+    moral_goodness_mean = format(
+      round(mean(moral_goodness, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    moral_goodness_sd = format(
+      round(sd(moral_goodness, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+
+    # Trust
+    trust_mean = format(
+      round(mean(trust, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    trust_sd = format(
+      round(sd(trust, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+
+    # Principled Motivation (Norm Signaling)
+    principled_motivation_mean = format(
+      round(mean(principled_motivation, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    principled_motivation_sd = format(
+      round(sd(principled_motivation, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+
+    # Reputation Signaling
+    rep_signal_mean = format(
+      round(mean(rep_signal, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    rep_signal_sd = format(
+      round(sd(rep_signal, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+
+    # Normative Expectation
+    norm_expect_mean = format(
+      round(mean(norm_expect, na.rm = TRUE), 2),
+      nsmall = 2
+    ),
+    norm_expect_sd = format(
+      round(sd(norm_expect, na.rm = TRUE), 2),
+      nsmall = 2
+    )
+  ) %>%
+  dplyr::ungroup() %>%
+  tidyr::pivot_wider(
+    names_from = condition,
+    values_from = c(
+      moral_goodness_mean, moral_goodness_sd,
+      trust_mean, trust_sd,
+      principled_motivation_mean, principled_motivation_sd,
+      rep_signal_mean, rep_signal_sd,
+      norm_expect_mean, norm_expect_sd
+    )
+  ) %>%
+  dplyr::mutate(
+    moral_goodness_mean_sd_Private_Self = stringr::str_c(
+      `moral_goodness_mean_Private-Self`,
+      " (", `moral_goodness_sd_Private-Self`, ")"
+    ),
+    moral_goodness_mean_sd_Private_Other = stringr::str_c(
+      `moral_goodness_mean_Private-Other`,
+      " (", `moral_goodness_sd_Private-Other`, ")"
+    ),
+    moral_goodness_mean_sd_Public_Self = stringr::str_c(
+      `moral_goodness_mean_Public-Self`,
+      " (", `moral_goodness_sd_Public-Self`, ")"
+    ),
+    moral_goodness_mean_sd_Public_Other = stringr::str_c(
+      `moral_goodness_mean_Public-Other`,
+      " (", `moral_goodness_sd_Public-Other`, ")"
+    ),
+    trust_mean_sd_Private_Self = stringr::str_c(
+      `trust_mean_Private-Self`,
+      " (", `trust_sd_Private-Self`, ")"
+    ),
+    trust_mean_sd_Private_Other = stringr::str_c(
+      `trust_mean_Private-Other`,
+      " (", `trust_sd_Private-Other`, ")"
+    ),
+    trust_mean_sd_Public_Self = stringr::str_c(
+      `trust_mean_Public-Self`,
+      " (", `trust_sd_Public-Self`, ")"
+    ),
+    trust_mean_sd_Public_Other = stringr::str_c(
+      `trust_mean_Public-Other`,
+      " (", `trust_sd_Public-Other`, ")"
+    ),
+    principled_motivation_mean_sd_Private_Self = stringr::str_c(
+      `principled_motivation_mean_Private-Self`,
+      " (", `principled_motivation_sd_Private-Self`, ")"
+    ),
+    principled_motivation_mean_sd_Private_Other = stringr::str_c(
+      `principled_motivation_mean_Private-Other`,
+      " (", `principled_motivation_sd_Private-Other`, ")"
+    ),
+    principled_motivation_mean_sd_Public_Self = stringr::str_c(
+      `principled_motivation_mean_Public-Self`,
+      " (", `principled_motivation_sd_Public-Self`, ")"
+    ),
+    principled_motivation_mean_sd_Public_Other = stringr::str_c(
+      `principled_motivation_mean_Public-Other`,
+      " (", `principled_motivation_sd_Public-Other`, ")"
+    ),
+    rep_signal_mean_sd_Private_Self = stringr::str_c(
+      `rep_signal_mean_Private-Self`,
+      " (", `rep_signal_sd_Private-Self`, ")"
+    ),
+    rep_signal_mean_sd_Private_Other = stringr::str_c(
+      `rep_signal_mean_Private-Other`,
+      " (", `rep_signal_sd_Private-Other`, ")"
+    ),
+    rep_signal_mean_sd_Public_Self = stringr::str_c(
+      `rep_signal_mean_Public-Self`,
+      " (", `rep_signal_sd_Public-Self`, ")"
+    ),
+    rep_signal_mean_sd_Public_Other = stringr::str_c(
+      `rep_signal_mean_Public-Other`,
+      " (", `rep_signal_sd_Public-Other`, ")"
+    ),
+    norm_expect_mean_sd_Private_Self = stringr::str_c(
+      `norm_expect_mean_Private-Self`,
+      " (", `norm_expect_sd_Private-Self`, ")"
+    ),
+    norm_expect_mean_sd_Private_Other = stringr::str_c(
+      `norm_expect_mean_Private-Other`,
+      " (", `norm_expect_sd_Private-Other`, ")"
+    ),
+    norm_expect_mean_sd_Public_Self = stringr::str_c(
+      `norm_expect_mean_Public-Self`,
+      " (", `norm_expect_sd_Public-Self`, ")"
+    ),
+    norm_expect_mean_sd_Public_Other = stringr::str_c(
+      `norm_expect_mean_Public-Other`,
+      " (", `norm_expect_sd_Public-Other`, ")"
+    )
+  ) %>%
+  dplyr::select(-c(
+    `moral_goodness_mean_Private-Self`, `moral_goodness_sd_Private-Self`,
+    `moral_goodness_mean_Private-Other`, `moral_goodness_sd_Private-Other`,
+    `moral_goodness_mean_Public-Self`, `moral_goodness_sd_Public-Self`,
+    `moral_goodness_mean_Public-Other`, `moral_goodness_sd_Public-Other`,
+    `trust_mean_Private-Self`, `trust_sd_Private-Self`,
+    `trust_mean_Private-Other`, `trust_sd_Private-Other`,
+    `trust_mean_Public-Self`, `trust_sd_Public-Self`,
+    `trust_mean_Public-Other`, `trust_sd_Public-Other`,
+    `principled_motivation_mean_Private-Self`,
+    `principled_motivation_sd_Private-Self`,
+    `principled_motivation_mean_Private-Other`,
+    `principled_motivation_sd_Private-Other`,
+    `principled_motivation_mean_Public-Self`,
+    `principled_motivation_sd_Public-Self`,
+    `principled_motivation_mean_Public-Other`,
+    `principled_motivation_sd_Public-Other`,
+    `rep_signal_mean_Private-Self`, `rep_signal_sd_Private-Self`,
+    `rep_signal_mean_Private-Other`, `rep_signal_sd_Private-Other`,
+    `rep_signal_mean_Public-Self`, `rep_signal_sd_Public-Self`,
+    `rep_signal_mean_Public-Other`, `rep_signal_sd_Public-Other`,
+    `norm_expect_mean_Private-Self`, `norm_expect_sd_Private-Self`,
+    `norm_expect_mean_Private-Other`, `norm_expect_sd_Private-Other`,
+    `norm_expect_mean_Public-Self`, `norm_expect_sd_Public-Self`,
+    `norm_expect_mean_Public-Other`, `norm_expect_sd_Public-Other`
+  )) %>%
+  readr::write_csv(
+    here("study-13-14/data/study2-descriptive-statistics-table.csv")
+  )
+```
+
+
+# Clean Workspace
+
+```{r clean-workspace}
+rm(list = ls()) # clear environment
+gc() # garbage collection
+cat("\014") # clear console
+.rs.restartR() # restart R
+```

@@ -1,0 +1,169 @@
+---
+title: "JTF 13 + 14: Study 3 Data Cleaning + Wrangling"
+author: "Nathan Liang"
+date: "May 8, 2023"
+---
+
+# Import Packages and Datasets
+
+```{r load-packages-data}
+if (!require(pacman)) install.packages("pacman")
+require(pacman)
+pacman::p_load(tidyverse, here)
+
+study3_df <- readr::read_csv(here(
+  "study-13-14/data/raw/study3-raw.csv"
+), show_col_types = F) %>%
+  janitor::clean_names("snake") %>%
+  mutate_if(is.character, list(~ na_if(., "")))
+```
+
+
+# Unneeded Columns
+
+```{r drop-unused-columns}
+# <!-- Drop Qualtrics columns that clog up dataframe --> #
+study3_df <- study3_df %>%
+  dplyr::filter(progress >= 98) %>%
+  dplyr::select(-c(
+    grep(".click|.submit|.count", names(study3_df)),
+    start_date:recorded_date,
+    recipient_last_name:consent
+  ))
+```
+
+# Attention Checks
+```{r filter-attention-check}
+table(study3_df$att_check)
+# "orange"   orange   Orange  orange.  Orange.
+#       1      818       73        8        1
+
+study3_df <- study3_df %>%
+  # <!-- Drop duplicates --> #
+  dplyr::distinct(id, .keep_all = T) %>%
+  # <!-- Check whether attention check was correctly answered --> #
+  # dplyr::mutate(att_check = str_remove_all(tolower(att_check), " ")) %>%
+  # dplyr::filter(att_check == "orange") %>%
+  dplyr::select(-att_check) %>%
+  dplyr::mutate_all(~ if_else(is.nan(.), NA, .))
+```
+
+
+# Reformat Data with Pivot
+
+```{r reformat-data}
+study3_df <- study3_df %>%
+  tidyr::pivot_longer(
+    cols = starts_with("x"),
+    names_to = c(
+      "vignette",
+      "private1_public0",
+      "self1_other0",
+      "question"
+    ),
+    names_pattern = "x(\\d*)_([a-z]*)_([a-z]*)_([a-z]*_?[\\d]?[\\d]?)",
+    values_to = "response"
+  ) %>%
+  tidyr::separate(self1_other0, into = c(
+    "self1_other0_engagement",
+    "self1_other0_rating"
+  ), sep = 1) %>%
+  dplyr::mutate(
+    # <!-- Recode "self" = 1, "other" = 0 --> #
+    self1_other0_engagement = if_else(self1_other0_engagement == "s", 1, 0),
+    self1_other0_rating = if_else(self1_other0_rating == "s", 1, 0),
+
+    # <!-- Recode "private" = 1, "public" = 0 --> #
+    private1_public0 = if_else(private1_public0 == "pr", 1, 0),
+
+    # <!-- Create column dummy coding appearance of vignette --> #
+    has_vignette = if_else(!is.na(response), 1, 0)
+  ) %>%
+  # <!-- Swing MG<1-2> and Rating<1-10> from long to wide format --> #
+  tidyr::pivot_wider(names_from = question, values_from = response) %>%
+  # <!-- Name vignette columns "vignette_#" --> #
+  dplyr::mutate(vignette = paste0("vignette_", vignette)) %>%
+  # <!-- Only keep the rows where participants actually saw vignettes --> #
+  dplyr::filter(has_vignette == 1) %>%
+  # <!-- Swing dummy-coded vignette long rows to wide columns --> #
+  dplyr::mutate(
+    vignette_1 = if_else(vignette == "vignette_1", 1, 0),
+    vignette_2 = if_else(vignette == "vignette_2", 1, 0),
+    vignette_3 = if_else(vignette == "vignette_3", 1, 0),
+    vignette_4 = if_else(vignette == "vignette_4", 1, 0),
+    vignette_5 = if_else(vignette == "vignette_5", 1, 0),
+    vignette_6 = if_else(vignette == "vignette_6", 1, 0),
+    vignette_7 = if_else(vignette == "vignette_7", 1, 0),
+    vignette_8 = if_else(vignette == "vignette_8", 1, 0),
+    vignette_9 = if_else(vignette == "vignette_9", 1, 0),
+    vignette_10 = if_else(vignette == "vignette_10", 1, 0),
+    vignette_11 = if_else(vignette == "vignette_11", 1, 0),
+    vignette_12 = if_else(vignette == "vignette_12", 1, 0),
+    vignette_13 = if_else(vignette == "vignette_13", 1, 0),
+    vignette_14 = if_else(vignette == "vignette_14", 1, 0),
+    vignette_15 = if_else(vignette == "vignette_15", 1, 0),
+    vignette_16 = if_else(vignette == "vignette_16", 1, 0),
+    vignette_17 = if_else(vignette == "vignette_17", 1, 0),
+
+    # <!-- Add unique numerical ID --> #
+    id = rep(1:901, each = 5)
+  ) %>%
+  dplyr::relocate(c(vignette_10:vignette_17), .after = vignette_9) %>%
+  # <!-- Recode likert response text to ordinal 1-7 scale --> #
+  dplyr::mutate(across(
+    mg:motive_10,
+    ~ as.numeric(recode(.,
+      "Strongly agree" = 7,
+      "Agree" = 6,
+      "Somewhat agree" = 5,
+      "Neither agree nor disagree" = 4,
+      "Somewhat disagree" = 3,
+      "Disagree" = 2,
+      "Strongly disagree" = 1
+    ))
+  )) %>%
+  # <!-- Rename religiosity and political belief columns --> #
+  dplyr::rename(
+    "secular1_4religious" = "rel",
+    "pol_soc_conservative1_7liberal" = "pol_soc",
+    "pol_econ_conservative1_7liberal" = "pol_econ"
+  ) %>%
+  # <!-- Recode continuous demographics questions --> #
+  # Religiosity
+  dplyr::mutate(
+    secular1_4religious = recode(secular1_4religious,
+      "Very religious" = 4,
+      "Moderately religious" = 3,
+      "Slightly religious" = 2,
+      "Not at all religious" = 1,
+      "Don't know" = 0
+    ),
+
+    # ...and both political belief questions
+    across(
+      pol_soc_conservative1_7liberal:pol_econ_conservative1_7liberal,
+      ~ as.numeric(recode(.,
+        "Very liberal" = 7,
+        "Liberal" = 6,
+        "Somewhat liberal" = 5,
+        "Moderate" = 4,
+        "Somewhat conservative" = 3,
+        "Conservative" = 2,
+        "Very conservative" = 1
+      ))
+    )
+  ) %>%
+  # <!-- Drop incorrect/unnecessary columns --> #
+  dplyr::select(-c(has_vignette, random_id))
+```
+
+# Write output file(s)
+```{r write-output-clean-workspace}
+# Export dataset to analyze with separate script
+readr::write_csv(study3_df, here("study-13-14/data/clean/study3-clean.csv"))
+
+rm(list = ls()) # clear environment
+gc() # garbage collection
+cat("\014") # clear console
+.rs.restartR() # restart R
+```
